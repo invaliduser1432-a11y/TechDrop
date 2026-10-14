@@ -1,0 +1,26 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Icon from '../../components/Icon.astro';
+import { runtime } from '../../lib/runtime';
+const categories = await runtime()
+  .DB.prepare('SELECT id,name FROM categories WHERE enabled=1 ORDER BY name')
+  .all<{ id: string; name: string }>();
+---
+
+<Layout title="Browse technology categories">
+  <div class="container">
+    <div class="page-top">
+      <div class="eyebrow">FIND YOUR NEXT UPGRADE</div>
+      <h1>Every corner of tech.</h1>
+      <p class="small">Explore current deals and the histories behind them.</p>
+    </div>
+    <div class="category-grid">
+      {categories.results.map((c) => (
+        <a class="category-tile" href={`/categories/${c.id}`}>
+          <Icon name="chip" />
+          {c.name}
+        </a>
+      ))}
+    </div>
+  </div>
+</Layout>

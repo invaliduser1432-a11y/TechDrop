@@ -1,0 +1,7 @@
+node_modules
+dist
+work
+.astro
+.wrangler
+package-lock.json
+public/art

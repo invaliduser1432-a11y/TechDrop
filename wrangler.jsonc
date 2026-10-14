@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dealradar",
+  "main": "@astrojs/cloudflare/entrypoints/server",
+  "compatibility_date": "2026-10-14",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "binding": "ASSETS", "directory": "dist/client" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "dealradar",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "vars": {
+    "APP_MODE": "demo",
+    "SITE_URL": "http://localhost:4321",
+    "ALLOW_LOCAL_ADMIN": "true",
+    "LIVE_PUBLISHING_ALLOWED": "false",
+  },
+}

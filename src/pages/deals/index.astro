@@ -1,0 +1,45 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import DealBrowser from '../../components/DealBrowser.astro';
+import { runtime } from '../../lib/runtime';
+import { publicDeals } from '../../lib/db/repository';
+const e = runtime(),
+  params = Astro.url.searchParams,
+  page = Math.max(1, Math.min(100, Number(params.get('page')) || 1)),
+  sort = params.get('sort') ?? 'score',
+  category = params.get('category') ?? '',
+  max = params.get('max') ?? '';
+const [deals, categories] = await Promise.all([
+  publicDeals(e, {
+    category,
+    sort,
+    limit: 13,
+    offset: (page - 1) * 12,
+    maxPrice: ['50', '100'].includes(max) ? Number(max) * 100 : undefined,
+  }),
+  e.DB.prepare('SELECT id,name FROM categories WHERE enabled=1').all<{
+    id: string;
+    name: string;
+  }>(),
+]);
+---
+
+<Layout title="Today's technology deals" noindex={params.size > 0}>
+  <div class="container">
+    <div class="page-top">
+      <div class="eyebrow">THE DEAL FEED</div>
+      <h1>Today's technology deals</h1>
+      <p class="small">
+        Listing-specific price history. Transparent savings. Current availability.
+      </p>
+    </div>
+    <DealBrowser
+      deals={deals}
+      categories={categories.results}
+      category={category}
+      page={page}
+      sort={sort}
+      max={max}
+    />
+  </div>
+</Layout>

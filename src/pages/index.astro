@@ -1,0 +1,276 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Icon from '../components/Icon.astro';
+import DealSection from '../components/DealSection.astro';
+import DealCard from '../components/DealCard.astro';
+import { runtime } from '../lib/runtime';
+import { publicDeals } from '../lib/db/repository';
+import { money } from '../lib/types';
+const e = runtime();
+const [deals, categories, tracked] = await Promise.all([
+  publicDeals(e, { limit: 50 }),
+  e.DB.prepare('SELECT * FROM categories WHERE enabled=1 ORDER BY name').all<{
+    id: string;
+    name: string;
+  }>(),
+  e.DB.prepare('SELECT COUNT(*) count FROM product_listings WHERE demo=?')
+    .bind(e.APP_MODE === 'demo' ? 1 : 0)
+    .first<{ count: number }>(),
+]);
+const featured = deals[0],
+  discounts = [...deals].sort((a, b) => b.discount - a.discount),
+  recent = [...deals].sort((a, b) => b.checked_at - a.checked_at);
+const icons: Record<string, string> = {
+  'graphics-cards': 'chip',
+  processors: 'chip',
+  ram: 'chip',
+  storage: 'storage',
+  'gaming-laptops': 'laptop',
+  desktops: 'monitor',
+  monitors: 'monitor',
+  keyboards: 'keyboard',
+  mice: 'mouse',
+  headphones: 'headphones',
+  smartphones: 'phone',
+  tablets: 'phone',
+  'smart-home': 'home',
+  electronics: 'spark',
+};
+---
+
+<Layout>
+  <div class="container">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">
+          <span class="dot" /> LESS GUESSWORK. MORE VALUE.
+        </div>
+        <h1>
+          Good tech.
+          <br />
+          <span>Better prices.</span>
+        </h1>
+        <p>
+          Discover price drops with a history behind them. We track the numbers, so you can shop
+          with confidence.
+        </p>
+        <div class="hero-actions">
+          <a href="#todays-deals" class="button primary">
+            Explore today's deals <Icon size={16} />
+          </a>
+          <a href="/methodology" class="button">
+            How we find deals
+          </a>
+        </div>
+        <div class="hero-facts">
+          <div>
+            <b>{deals.length}</b>Current {e.APP_MODE === 'demo' ? 'demo ' : ''}deals
+          </div>
+          <div>
+            <b>{tracked?.count ?? 0}</b>Listings tracked
+          </div>
+          <div>
+            <b>30 min</b>Default check interval
+          </div>
+        </div>
+      </div>
+      {featured ? (
+        <article class="hero-feature">
+          <div class="visual">
+            <span class="pick-label">ON OUR RADAR · {featured.score}/100</span>
+            {featured.image_permitted && featured.image_url ? (
+              <img
+                src={featured.image_url}
+                alt={
+                  featured.demo ? `Demonstration illustration of ${featured.name}` : featured.name
+                }
+                width="320"
+                height="240"
+              />
+            ) : (
+              <Icon name="chip" size={90} />
+            )}
+            <span class="demo-label">{featured.demo ? 'SIMULATED OFFER' : ''}</span>
+          </div>
+          <div class="feature-copy">
+            <div class="retailer-label">
+              {featured.category_name} · {featured.retailer}
+            </div>
+            <h2>{featured.name}</h2>
+            <div class="price-line">
+              <span class="price">{money(featured.current_cents)}</span>
+              <span class="baseline">{money(featured.baseline_cents)}</span>
+              <span class="badge">−{Math.floor(featured.discount)}%</span>
+            </div>
+            <span class="small">Same listing. Recorded historical baseline.</span>
+          </div>
+          <a href={`/deals/${featured.slug}`} class="button primary">
+            See the price history <Icon size={14} />
+          </a>
+        </article>
+      ) : (
+        <div class="panel">
+          <Icon name="radar" size={50} />
+          <h2>The next great deal is on our radar.</h2>
+          <p class="small">
+            Authorized sources need sufficient recorded history before a deal can qualify.
+          </p>
+        </div>
+      )}
+    </section>
+    <div class="trust-strip">
+      <div>
+        <Icon name="shield" />
+        Recorded price evidence
+      </div>
+      <div>
+        <Icon name="chart" />
+        Transparent price history
+      </div>
+      <div>
+        <Icon name="clock" />
+        Freshness checked before display
+      </div>
+      <div>
+        <Icon name="check" />
+        No invented reviews
+      </div>
+    </div>
+    <div class="section" id="todays-deals">
+      <div class="section-heading">
+        <div>
+          <h2>Today's best finds</h2>
+          <p>
+            {e.APP_MODE === 'demo'
+              ? 'Simulated deals to explore the complete experience.'
+              : 'Current offers qualified against observed listing history.'}
+          </p>
+        </div>
+        <a href="/deals">
+          View all deals <Icon size={13} />
+        </a>
+      </div>
+      <div class="filterbar">
+        <a class="chip active" href="/deals">
+          All tech
+        </a>
+        {['graphics-cards', 'storage', 'monitors', 'headphones', 'keyboards'].map((id) => (
+          <a class="chip" href={`/categories/${id}`}>
+            {categories.results.find((c) => c.id === id)?.name}
+          </a>
+        ))}
+        <a class="chip" href="/categories">
+          More categories +
+        </a>
+      </div>
+      {deals.length ? (
+        <div class="deal-grid">
+          {deals.slice(0, 8).map((d) => (
+            <DealCard deal={d} />
+          ))}
+        </div>
+      ) : (
+        <div class="empty">
+          No current deals qualify yet. Check back after the next authorized refresh.
+        </div>
+      )}
+    </div>
+    <DealSection
+      title="Fresh price drops"
+      description="Recently detected changes worth a closer look."
+      deals={[...deals].sort((a, b) => b.detected_at - a.detected_at).slice(0, 4)}
+      href="/deals?sort=recent"
+    />
+    <section class="section" id="categories">
+      <div class="section-heading">
+        <div>
+          <h2>Find your next upgrade</h2>
+          <p>Good prices, across the tech you care about.</p>
+        </div>
+        <a href="/categories">
+          All categories <Icon size={13} />
+        </a>
+      </div>
+      <div class="category-grid">
+        {categories.results.map((c) => (
+          <a class="category-tile" href={`/categories/${c.id}`}>
+            <Icon name={icons[c.id]} />
+            {c.name}
+          </a>
+        ))}
+      </div>
+    </section>
+    <DealSection
+      title="The biggest discounts"
+      description="Sorted by savings against a recorded historical baseline."
+      deals={discounts.slice(0, 4)}
+      href="/deals?sort=discount"
+    />
+    <div class="editorial">
+      <div>
+        <div class="eyebrow">A LITTLE EVIDENCE GOES A LONG WAY</div>
+        <h2 style="margin-top:12px">
+          A lower price should
+          <br />
+          come with a clearer picture.
+        </h2>
+        <p>
+          A crossed-out price tells only part of the story. Our deal scores use actual observations
+          of the same listing, with shipping and condition taken into account.
+        </p>
+        <a href="/methodology">Get to know our methodology →</a>
+      </div>
+      <div class="principles">
+        <div>
+          <Icon name="chart" />
+          <section>
+            <strong>History before hype</strong>
+            <p>A median of recorded prices, never a retailer's suggested original price.</p>
+          </section>
+        </div>
+        <div>
+          <Icon name="shield" />
+          <section>
+            <strong>The same item, compared fairly</strong>
+            <p>Models, variants, conditions, and currencies stay separate.</p>
+          </section>
+        </div>
+        <div>
+          <Icon name="clock" />
+          <section>
+            <strong>Fresh prices matter</strong>
+            <p>Stale and unavailable offers leave the active deal feed.</p>
+          </section>
+        </div>
+      </div>
+    </div>
+    <DealSection
+      title="Small prices. Solid upgrades."
+      description="Deals under $50, including known shipping."
+      deals={deals.filter((d) => d.current_cents < 5000).slice(0, 4)}
+      href="/deals?max=50"
+    />
+    <DealSection
+      title="More tech for under $100"
+      description="Useful upgrades without the bigger spend."
+      deals={deals.filter((d) => d.current_cents < 10000).slice(0, 4)}
+      href="/deals?max=100"
+    />
+    <DealSection
+      title="Near their observed lows"
+      description="At or near the lowest recorded total price for this listing."
+      deals={deals
+        .filter(
+          (d) => d.observed_low_cents !== null && d.current_cents <= d.observed_low_cents * 1.05,
+        )
+        .slice(0, 4)}
+      href="/price-history"
+    />
+    <DealSection
+      title="Recently checked"
+      description="The latest refreshed offers in the current feed."
+      deals={recent.slice(0, 4)}
+      href="/deals?sort=recent"
+    />
+  </div>
+</Layout>

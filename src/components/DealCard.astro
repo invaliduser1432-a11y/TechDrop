@@ -1,0 +1,56 @@
+---
+import type { DealView } from '../lib/types';
+import { money, timeAgo } from '../lib/types';
+import Icon from './Icon.astro';
+interface Props {
+  deal: DealView;
+}
+const { deal: d } = Astro.props;
+---
+
+<article class="deal-card">
+  <a href={`/deals/${d.slug}`} class="card-visual" aria-label={`View ${d.name}`}>
+    <span class="discount-badge">↓ {Math.floor(d.discount)}% off</span>
+    {d.image_permitted && d.image_url ? (
+      <img
+        src={d.image_url}
+        alt={d.demo ? `Illustration of ${d.name}` : d.name}
+        width="320"
+        height="240"
+        loading="lazy"
+      />
+    ) : (
+      <Icon name="chip" size={70} />
+    )}
+    <span class="demo-label">{d.demo ? 'DEMO ILLUSTRATION' : d.condition.toUpperCase()}</span>
+  </a>
+  <div class="card-body">
+    <div class="retailer-label">
+      {d.retailer} · {d.category_name}
+    </div>
+    <h3>
+      <a href={`/deals/${d.slug}`}>{d.name}</a>
+    </h3>
+    <div class="price-line">
+      <span class="price">{money(d.current_cents)}</span>
+      <span class="baseline" title="Previously observed total price">
+        {money(d.baseline_cents)}
+      </span>
+    </div>
+    <p class="savings">
+      Save {money(d.savings_cents)} ·{' '}
+      {d.shipping_cents === 0 ? 'free shipping' : 'includes shipping'}
+    </p>
+    <div class="card-meta">
+      <span class="quality">
+        {d.score >= 85 ? 'Excellent' : 'Good'} · {d.score}/100
+      </span>
+      <span>
+        {d.demo ? 'Simulated' : 'Checked'} {timeAgo(d.checked_at)}
+      </span>
+    </div>
+    <a class="button" href={`/deals/${d.slug}`}>
+      View deal <Icon size={14} />
+    </a>
+  </div>
+</article>

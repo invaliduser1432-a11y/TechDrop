@@ -1,0 +1,30 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Privacy">
+  <article class="prose">
+    <h1>Privacy, kept simple.</h1>
+    <p>
+      DealRadar records the deal ID, retailer, event time, and campaign source when a purchase link
+      is clicked. We do not store IP addresses, fingerprints, or advertising profiles with click
+      events. Events expire after 90 days.
+    </p>
+    <p>
+      A short-lived hash of the request address and current minute is used solely to limit automated
+      abuse. Those rate-limit identifiers change every minute. Buckets older than ten minutes are
+      purged during monitoring maintenance; pausing background work also pauses physical cleanup.
+      Your theme preference is saved locally in your browser.
+    </p>
+    <p>
+      Administrator authentication uses Cloudflare Access in deployed environments. Local demo
+      administration uses an expiring signed, HTTP-only session cookie. Administrative audit events
+      are retained for 180 days and operational errors for 30 days.
+    </p>
+    <p>
+      Retailers and approved affiliate providers apply their own privacy policies after you follow
+      an outbound link. No newsletter signup, advertising tracker, or subscription billing is
+      enabled.
+    </p>
+  </article>
+</Layout>

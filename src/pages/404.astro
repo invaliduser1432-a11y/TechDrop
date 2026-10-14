@@ -1,0 +1,19 @@
+---
+import Layout from '../layouts/Layout.astro';
+Astro.response.status = 404;
+---
+
+<Layout title="Page not found" noindex>
+  <div class="container">
+    <div class="empty" style="margin:60px 0">
+      <div class="eyebrow" style="justify-content:center">
+        404 · OFF THE RADAR
+      </div>
+      <h1>We couldn't find that page.</h1>
+      <p>Try the current deal feed or browse by category.</p>
+      <a href="/deals" class="button primary">
+        Explore deals
+      </a>
+    </div>
+  </div>
+</Layout>

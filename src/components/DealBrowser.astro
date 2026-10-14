@@ -1,0 +1,93 @@
+---
+import DealCard from './DealCard.astro';
+import type { DealView } from '../lib/types';
+interface Props {
+  deals: DealView[];
+  categories: { id: string; name: string }[];
+  category?: string;
+  page: number;
+  sort: string;
+  max?: string;
+}
+const { deals, categories, category, page, sort, max } = Astro.props;
+const search = new URLSearchParams(Astro.url.search);
+const pageLink = (n: number) => {
+  const p = new URLSearchParams(search);
+  p.set('page', String(n));
+  return `${Astro.url.pathname}?${p}`;
+};
+---
+
+<form class="filterbar" method="GET" id="filters">
+  {Astro.url.searchParams.has('q') && (
+    <input type="hidden" name="q" value={Astro.url.searchParams.get('q') ?? ''} />
+  )}
+  <label class="sort">
+    Category
+    <select name="category" aria-label="Filter category">
+      <option value="">All tech</option>
+      {categories.map((c) => (
+        <option value={c.id} selected={category === c.id}>
+          {c.name}
+        </option>
+      ))}
+    </select>
+  </label>
+  <label class="sort">
+    Budget
+    <select name="max" aria-label="Maximum price">
+      <option value="">Any price</option>
+      <option value="50" selected={max === '50'}>
+        Under $50
+      </option>
+      <option value="100" selected={max === '100'}>
+        Under $100
+      </option>
+    </select>
+  </label>
+  <label class="sort">
+    Sort by
+    <select name="sort" aria-label="Sort deals">
+      <option value="score" selected={sort === 'score'}>
+        Best deal score
+      </option>
+      <option value="discount" selected={sort === 'discount'}>
+        Biggest discount
+      </option>
+      <option value="recent" selected={sort === 'recent'}>
+        Recently detected
+      </option>
+      <option value="price" selected={sort === 'price'}>
+        Lowest price
+      </option>
+    </select>
+  </label>
+  <button type="submit">Apply filters</button>
+</form>
+{deals.length ? (
+  <div class="deal-grid">
+    {deals.slice(0, 12).map((d) => (
+      <DealCard deal={d} />
+    ))}
+  </div>
+) : (
+  <div class="empty">
+    <h2>No matching deals yet</h2>
+    <p>Try a broader search or another category.</p>
+    <a href="/deals" class="button">
+      Explore all deals
+    </a>
+  </div>
+)}
+<nav class="pagination" aria-label="Pagination">
+  {page > 1 && (
+    <a class="button" href={pageLink(page - 1)}>
+      ← Previous
+    </a>
+  )}
+  {deals.length > 12 && (
+    <a class="button" href={pageLink(page + 1)}>
+      Next →
+    </a>
+  )}
+</nav>

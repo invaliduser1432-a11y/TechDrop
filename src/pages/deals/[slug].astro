@@ -1,0 +1,279 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Icon from '../../components/Icon.astro';
+import DealSection from '../../components/DealSection.astro';
+import PriceChart from '../../components/PriceChart';
+import { runtime } from '../../lib/runtime';
+import { getSettings } from '../../lib/config';
+import { dealSelect, observations, getListing, publicDeals } from '../../lib/db/repository';
+import { historyStats } from '../../lib/price/scoring';
+import { money, timeAgo, type DealView } from '../../lib/types';
+import { purchaseUrl } from '../../lib/affiliate/links';
+const e = runtime(),
+  settings = await getSettings(e.DB);
+const deal = await e.DB.prepare(
+  `${dealSelect} WHERE d.slug=? AND l.demo=? AND d.status IN ('active','expired')`,
+)
+  .bind(Astro.params.slug, e.APP_MODE === 'demo' ? 1 : 0)
+  .first<DealView>();
+const listing = deal ? await getListing(e.DB, deal.listing_id) : null;
+const history = listing ? await observations(e.DB, listing.id) : [];
+const stats = listing ? historyStats(listing, history) : null;
+const expired =
+  deal &&
+  (deal.status === 'expired' ||
+    !deal.available ||
+    Date.now() - deal.checked_at > settings.freshnessMinutes * 60000 ||
+    deal.current_cents !== deal.price_cents + (deal.shipping_cents ?? 0));
+Astro.response.status = !deal ? 404 : expired ? 410 : 200;
+let destination = '';
+if (deal && !expired) {
+  const retailer = await e.DB.prepare(
+    'SELECT allowed_hosts,affiliate_hosts FROM retailers WHERE id=?',
+  )
+    .bind(deal.retailer_id)
+    .first<{ allowed_hosts: string; affiliate_hosts: string }>();
+  try {
+    destination = purchaseUrl(
+      deal.original_url,
+      deal.affiliate_url,
+      JSON.parse(retailer!.allowed_hosts),
+      JSON.parse(retailer!.affiliate_hosts),
+    );
+  } catch {
+    /* no unsafe link rendered */
+  }
+}
+const related = deal
+  ? (await publicDeals(e, { category: deal.category_id, limit: 5 }))
+      .filter((d) => d.id !== deal.id)
+      .slice(0, 4)
+  : [];
+const specs = deal ? JSON.parse(deal.specs) : {};
+const structured =
+  deal && !expired
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'Product',
+        name: deal.name,
+        description: `${deal.name}, ${deal.variant}, ${deal.condition}. Savings compared with recorded history of this listing.`,
+        brand: { '@type': 'Brand', name: deal.brand },
+        sku: deal.model,
+        offers: {
+          '@type': 'Offer',
+          url: destination,
+          priceCurrency: 'USD',
+          price: (deal.price_cents / 100).toFixed(2),
+          availability: 'https://schema.org/InStock',
+          itemCondition:
+            deal.condition === 'new'
+              ? 'https://schema.org/NewCondition'
+              : 'https://schema.org/UsedCondition',
+        },
+      }
+    : undefined;
+---
+
+<Layout
+  title={
+    deal
+      ? `${deal.name} — ${expired ? 'offer expired' : money(deal.current_cents)}`
+      : 'Deal not found'
+  }
+  noindex={!deal || !!expired}
+  structured={structured}
+>
+  <div class="container">
+    {deal && listing && stats ? (
+      <>
+        <div class="page-top">
+          <nav class="breadcrumbs" aria-label="Breadcrumb">
+            <a href="/">Home</a> /{' '}
+            <a href={`/categories/${deal.category_id}`}>{deal.category_name}</a> / {deal.name}
+          </nav>
+        </div>
+        {expired && (
+          <div class="status-message">
+            <strong>This offer has expired or needs rechecking.</strong> Its price is historical.
+            Visit the current deal feed for available offers.
+          </div>
+        )}
+        <div class="detail-grid">
+          <div class="detail-image">
+            {deal.image_permitted && deal.image_url ? (
+              <img
+                src={deal.image_url}
+                alt={deal.demo ? `Demonstration illustration of ${deal.name}` : deal.name}
+              />
+            ) : (
+              <Icon name="chip" size={90} />
+            )}
+            <span class="demo-label">{deal.demo ? 'ORIGINAL DEMO ILLUSTRATION' : ''}</span>
+          </div>
+          <div class="detail-copy">
+            <div class="eyebrow">{deal.category_name.toUpperCase()}</div>
+            <h1>{deal.name}</h1>
+            <div class="small">
+              {deal.retailer} · {deal.condition} · {deal.variant}
+            </div>
+            <div class="price-line" style="margin-top:20px">
+              <span class="price">{money(deal.current_cents)}</span>
+              <span class="baseline">{money(deal.baseline_cents)}</span>
+              <span class="badge">↓ {Math.floor(deal.discount)}%</span>
+            </div>
+            <p class="savings">
+              Save {money(deal.savings_cents)} compared with the previous historical median.
+            </p>
+            <p class="small">
+              {deal.shipping_cents === 0
+                ? 'Free shipping included'
+                : deal.shipping_cents === null
+                  ? 'Shipping unknown'
+                  : `${money(deal.shipping_cents)} shipping included`}{' '}
+              · {deal.demo ? 'Simulated check' : 'Last checked'} {timeAgo(deal.checked_at)}
+            </p>
+            <span class="badge">
+              <Icon name="shield" size={13} /> Deal score {deal.score}/100
+            </span>
+            {!expired && destination ? (
+              <a
+                class="button primary purchase-link"
+                href={destination}
+                data-deal-id={deal.id}
+                rel="sponsored noopener noreferrer"
+                target="_blank"
+              >
+                {deal.demo ? 'Open demonstration destination' : `View at ${deal.retailer}`}{' '}
+                <Icon size={17} />
+              </a>
+            ) : (
+              <a href="/deals" class="button">
+                Browse current deals
+              </a>
+            )}
+            <p class="disclosure">
+              We may earn a commission when you purchase through our links, at no additional cost to
+              you.
+            </p>
+            <p class="disclosure">
+              Prices and availability can change. Confirm the final item price, shipping, taxes, and
+              condition at the retailer before purchase.{' '}
+              {deal.demo && 'This is simulated data, not a real offer.'}
+            </p>
+          </div>
+        </div>
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <h2>Every price has a history.</h2>
+              <p>
+                {stats.days} observed days in the baseline window · median of the same listing's
+                previous total prices.
+              </p>
+            </div>
+            <a href="/methodology">Our methodology →</a>
+          </div>
+          <PriceChart
+            client:visible
+            observations={history
+              .filter((o) => o.shipping !== null)
+              .map((o) => ({ at: o.at, total: o.price + o.shipping! }))}
+            demo={!!deal.demo}
+          >
+            <div slot="fallback" class="skeleton" aria-label="Loading price chart" />
+          </PriceChart>
+          <div class="stat-grid">
+            <div class="stat">
+              <small>Lowest in tracked window</small>
+              <b>{money(stats.low)}</b>
+            </div>
+            <div class="stat">
+              <small>Highest in baseline window</small>
+              <b>{money(stats.high)}</b>
+            </div>
+            <div class="stat">
+              <small>Historical average</small>
+              <b>{money(stats.average)}</b>
+            </div>
+            <div class="stat">
+              <small>Historical median</small>
+              <b>{money(stats.median)}</b>
+            </div>
+          </div>
+          <p class="small">
+            Seven-day change:{' '}
+            {stats.change7 === null ? 'insufficient history' : `${stats.change7}%`} · Thirty-day
+            change: {stats.change30 === null ? 'insufficient history' : `${stats.change30}%`}{' '}
+            {stats.is30DayLow ? '· At the lowest price observed in a supported 30-day window.' : ''}
+          </p>
+          <details>
+            <summary class="small" style="cursor:pointer">
+              View recorded observations (available without JavaScript)
+            </summary>
+            <div class="overflow">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Observed at (UTC)</th>
+                    <th>Item price</th>
+                    <th>Shipping</th>
+                    <th>Source</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.slice(0, 100).map((o) => (
+                    <tr>
+                      <td>{new Date(o.at).toISOString().replace('T', ' ').slice(0, 16)}</td>
+                      <td>{money(o.price)}</td>
+                      <td>{o.shipping === null ? 'Unknown' : money(o.shipping)}</td>
+                      <td>{deal.demo ? 'Demonstration' : o.source}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </section>
+        <section class="panel">
+          <h2>Product information</h2>
+          <table class="data-table">
+            <tbody>
+              {Object.entries(specs).map(([k, v]) => (
+                <tr>
+                  <th>{k}</th>
+                  <td>{String(v)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+        <DealSection
+          title="More in this category"
+          description="Relevant current offers with their own listing histories."
+          deals={related}
+          href={`/categories/${deal.category_id}`}
+        />
+      </>
+    ) : (
+      <div class="empty" style="margin-top:50px">
+        <h1>That deal isn't on our radar.</h1>
+        <p>The address may be incorrect or the offer may have been removed.</p>
+        <a href="/deals" class="button primary">
+          Explore current deals
+        </a>
+      </div>
+    )}
+  </div>
+</Layout>
+<script>
+  document.querySelectorAll<HTMLAnchorElement>('.purchase-link').forEach((link) =>
+    link.addEventListener('click', () => {
+      fetch('/api/click', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dealId: link.dataset.dealId, source: 'website' }),
+        keepalive: true,
+      }).catch(() => {});
+    }),
+  );
+</script>

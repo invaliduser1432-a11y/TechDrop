@@ -1,0 +1,72 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { runtime } from '../../lib/runtime';
+import { localAdminAllowed } from '../../lib/security/auth';
+const allowed = localAdminAllowed(runtime(), Astro.url, import.meta.env.DEV);
+---
+
+<Layout title="Administrator sign in" noindex>
+  <div class="container">
+    <section class="panel login">
+      <div class="eyebrow">PRIVATE WORKSPACE</div>
+      <h1>DealRadar administration</h1>
+      {allowed ? (
+        <>
+          <p class="small">
+            Use the local administrator token generated in your ignored .dev.vars file. This login
+            is available only on localhost in development demo mode.
+          </p>
+          <form id="login-form">
+            <label class="field">
+              Local admin token
+              <input
+                type="password"
+                name="token"
+                autocomplete="current-password"
+                required
+                minlength="32"
+              />
+            </label>
+            <button class="primary" type="submit">
+              Sign in securely →
+            </button>
+          </form>
+          <p id="login-error" role="alert" class="small"></p>
+        </>
+      ) : (
+        <>
+          <p>Deployed administration requires Cloudflare Access.</p>
+          <p class="small">
+            Configure an Access application for /admin* and /api/admin/*, set the server team domain
+            and audience, and allow your administrator email. No development login is enabled here.
+          </p>
+        </>
+      )}
+    </section>
+  </div>
+</Layout>
+<script>
+  document
+    .querySelector<HTMLFormElement>('#login-form')
+    ?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget as HTMLFormElement;
+      const button = form.querySelector('button')!;
+      button.disabled = true;
+      try {
+        const response = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: new FormData(form).get('token') }),
+        });
+        const data: any = await response.json();
+        if (!response.ok) throw new Error(data.error);
+        location.href = '/admin';
+      } catch (error) {
+        document.querySelector('#login-error')!.textContent =
+          error instanceof Error ? error.message : 'Sign in failed';
+      } finally {
+        button.disabled = false;
+      }
+    });
+</script>

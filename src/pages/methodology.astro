@@ -1,0 +1,59 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="How we verify deals & calculate price history">
+  <article class="prose">
+    <div class="eyebrow">HISTORY BEFORE HYPE</div>
+    <h1>What makes a deal a deal?</h1>
+    <p>
+      A lower price is useful only when the comparison is meaningful. DealRadar records observations
+      from authorized sources and compares the same listing, model, variant, condition, and
+      currency.
+    </p>
+    <h2>Our historical baseline</h2>
+    <p>
+      The default baseline is the median of prior total prices in the last 30 days. The current
+      observation is excluded. Shipping must be known. We require at least eight distinct observed
+      days, a span of at least seven days, and no gap greater than 48 hours. A retailer's suggested
+      or crossed-out original price does not enter this calculation.
+    </p>
+    <h2>How savings are verified</h2>
+    <p>
+      Dollar savings equal the historical median minus the current item price and shipping.
+      Percentage savings are that difference divided by the baseline. The conservative default
+      requires at least a 15% reduction and $15 savings, current availability, a fresh price check,
+      sufficient history, and no recent repeat publication. Taxes are excluded because they depend
+      on the buyer's location.
+    </p>
+    <h2>A score, not a product rating</h2>
+    <p>
+      Scores from 0–100 combine percentage savings, dollar savings, evidence strength, freshness,
+      availability, and seller confidence when supplied. Initial weights are 30, 15, 25, 15, 10, and
+      5 respectively. Scores describe the strength of a price opportunity. They are not product
+      reviews. Administrators can change these weights and category adjustments.
+    </p>
+    <h2>Observed lows have limits</h2>
+    <p>
+      “Lowest observed” describes our records, never a guarantee of the lowest price anywhere. A
+      30-day low requires history reaching at least 30 days back, at least 30 distinct observed days
+      in the relevant period, and sufficiently continuous records. Sparse history cannot establish
+      this claim.
+    </p>
+    <h2>Evaluate the whole purchase</h2>
+    <p>
+      Check the exact model, capacity, condition, seller, warranty, delivery cost, and return
+      policy. A strong discount does not make a product right for you. Confirm the final price with
+      the retailer; offers can change between checks.
+    </p>
+    <h2>Demonstration data</h2>
+    <p>
+      Demo mode uses fictional products and simulated prices and history to make the platform
+      testable without credentials. Every page is labeled, blocked from indexing, and prevented from
+      publishing to real social accounts.
+    </p>
+    <p>
+      <a href="/deals">Explore the deal feed →</a>
+    </p>
+  </article>
+</Layout>

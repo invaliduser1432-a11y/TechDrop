@@ -1,0 +1,45 @@
+---
+import Layout from '../layouts/Layout.astro';
+import DealBrowser from '../components/DealBrowser.astro';
+import { runtime } from '../lib/runtime';
+import { publicDeals } from '../lib/db/repository';
+const e = runtime(),
+  q = (Astro.url.searchParams.get('q') ?? '').slice(0, 100),
+  page = Math.max(1, Math.min(100, Number(Astro.url.searchParams.get('page')) || 1)),
+  category = Astro.url.searchParams.get('category') ?? '',
+  sort = Astro.url.searchParams.get('sort') ?? 'score',
+  max = Astro.url.searchParams.get('max') ?? '';
+const [deals, categories] = await Promise.all([
+  q
+    ? publicDeals(e, {
+        query: q,
+        category,
+        sort,
+        limit: 13,
+        offset: (page - 1) * 12,
+        maxPrice: ['50', '100'].includes(max) ? Number(max) * 100 : undefined,
+      })
+    : Promise.resolve([]),
+  e.DB.prepare('SELECT id,name FROM categories WHERE enabled=1').all<{
+    id: string;
+    name: string;
+  }>(),
+]);
+---
+
+<Layout title={q ? `Search: ${q}` : 'Search tech deals'} noindex>
+  <div class="container">
+    <div class="page-top">
+      <h1>{q ? `Results for “${q}”` : 'Search tech deals'}</h1>
+      <p class="small">Search current product names and brands.</p>
+    </div>
+    <DealBrowser
+      deals={deals}
+      categories={categories.results}
+      category={category}
+      page={page}
+      sort={sort}
+      max={max}
+    />
+  </div>
+</Layout>

@@ -1,0 +1,791 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Icon from '../../components/Icon.astro';
+import { runtime } from '../../lib/runtime';
+import { getSettings } from '../../lib/config';
+import { dealSelect } from '../../lib/db/repository';
+import { money, timeAgo, type DealView } from '../../lib/types';
+const e = runtime(),
+  s = await getSettings(e.DB),
+  demo = e.APP_MODE === 'demo';
+const [
+  deals,
+  listings,
+  categories,
+  providers,
+  drafts,
+  jobs,
+  runs,
+  errors,
+  audits,
+  metrics,
+  revenue,
+  retailers,
+] = await Promise.all([
+  e.DB.prepare(`${dealSelect} WHERE l.demo=? ORDER BY d.detected_at DESC LIMIT 100`)
+    .bind(+demo)
+    .all<DealView>(),
+  e.DB.prepare(
+    'SELECT l.*,p.name,c.name category FROM product_listings l JOIN products p ON p.id=l.product_id JOIN categories c ON c.id=p.category_id WHERE l.demo=? ORDER BY l.checked_at DESC LIMIT 100',
+  )
+    .bind(+demo)
+    .all<any>(),
+  e.DB.prepare('SELECT * FROM categories ORDER BY name').all<any>(),
+  e.DB.prepare('SELECT * FROM data_providers').all<any>(),
+  e.DB.prepare(
+    'SELECT d.*,p.name FROM social_post_drafts d JOIN deals de ON de.id=d.deal_id JOIN product_listings l ON l.id=de.listing_id JOIN products p ON p.id=l.product_id WHERE l.demo=?',
+  )
+    .bind(+demo)
+    .all<any>(),
+  e.DB.prepare('SELECT * FROM social_publishing_jobs ORDER BY rowid DESC LIMIT 50').all<any>(),
+  e.DB.prepare('SELECT * FROM scheduled_job_runs ORDER BY started_at DESC LIMIT 20').all<any>(),
+  e.DB.prepare('SELECT * FROM error_logs ORDER BY created_at DESC LIMIT 20').all<any>(),
+  e.DB.prepare(
+    'SELECT * FROM administrator_audit_events ORDER BY created_at DESC LIMIT 20',
+  ).all<any>(),
+  e.DB.prepare(
+    'SELECT (SELECT COUNT(*) FROM affiliate_click_events) clicks,(SELECT SUM(checked) FROM scheduled_job_runs) checks',
+  ).first<any>(),
+  e.DB.prepare('SELECT COALESCE(SUM(amount_cents),0) amount FROM verified_revenue').first<{
+    amount: number;
+  }>(),
+  e.DB.prepare('SELECT * FROM retailers').all<any>(),
+]);
+const active = deals.results.filter(
+    (d) => d.status === 'active' && d.available && Date.now() - d.checked_at < 7200000,
+  ),
+  reviews = deals.results.filter((d) => d.status === 'review');
+const numericFields: [keyof typeof s, string, string][] = [
+  ['monitoringMinutes', 'Monitoring interval', 'minutes, minimum 30'],
+  ['batchSize', 'Batch size', 'listings per run, max 20'],
+  ['minDiscount', 'Minimum discount', 'percent'],
+  ['minSavings', 'Minimum savings', 'USD cents'],
+  ['minScore', 'Minimum deal score', '0–100'],
+  ['minHistoryDays', 'Minimum history span', 'days'],
+  ['minHistorySamples', 'Minimum observed days', 'distinct days, minimum 8'],
+  ['maxHistoryGapHours', 'Maximum history gap', 'hours'],
+  ['freshnessMinutes', 'Price freshness limit', 'minutes'],
+  ['duplicateHours', 'Publication cooldown', 'hours'],
+  ['socialMinScore', 'Social score threshold', '0–100'],
+  ['maxDailyPosts', 'Daily post limit', 'max 3, America/New_York'],
+  ['minPostHours', 'Minimum post spacing', 'hours, minimum 3'],
+];
+---
+
+<Layout title="Administration" noindex>
+  <div class="container admin-layout">
+    <aside class="admin-nav">
+      <h3>CONTROL CENTER</h3>
+      <a href="#overview">Overview</a>
+      <a href="#review">
+        Deal management <span class="badge">{reviews.length}</span>
+      </a>
+      <a href="#products">Tracked products</a>
+      <a href="#social">Social publishing</a>
+      <a href="#settings">System settings</a>
+      <a href="#sources">Sources & categories</a>
+      <a href="#health">System health</a>
+      <a href="#audit">Audit history</a>
+      <button data-action="logout" style="margin:20px 10px;font-size:11px">
+        Sign out
+      </button>
+    </aside>
+    <div>
+      <div class="admin-title">
+        <div>
+          <div class="eyebrow">YOUR PRIVATE WORKSPACE</div>
+          <h1>DealRadar control center</h1>
+          <p>
+            {demo ? 'Demo environment · All publishing is simulated' : 'Production environment'} ·{' '}
+            {Astro.locals.actor}
+          </p>
+        </div>
+        <button class="danger" data-action="stop">
+          <Icon name="shield" size={15} /> Stop everything
+        </button>
+      </div>
+      <div class="admin-panel" id="overview">
+        <div class="stat-grid">
+          {[
+            ['Tracked products', listings.results.length],
+            ['Active deals', active.length],
+            [
+              'Detected today',
+              deals.results.filter((d) => d.detected_at > Date.now() - 86400000).length,
+            ],
+            [
+              'Average discount',
+              `${active.length ? (active.reduce((a, b) => a + b.discount, 0) / active.length).toFixed(1) : 0}%`,
+            ],
+            ['Price checks', metrics?.checks ?? 0],
+            [
+              'Queued social posts',
+              jobs.results.filter((j) =>
+                ['queued', 'demo-queued', 'pending', 'retry'].includes(j.state),
+              ).length,
+            ],
+            ['Published posts', jobs.results.filter((j) => j.state === 'sent').length],
+            [
+              'Failed / uncertain',
+              jobs.results.filter((j) => ['failed', 'uncertain'].includes(j.state)).length,
+            ],
+            ['Outbound clicks', metrics?.clicks ?? 0],
+            ['Verified revenue', money(revenue?.amount ?? 0)],
+            ['System errors', errors.results.length],
+            [
+              'Stale listings',
+              listings.results.filter((l) => Date.now() - l.checked_at > 7200000).length,
+            ],
+          ].map(([label, value]) => (
+            <div class="stat">
+              <small>{label}</small>
+              <b>{value}</b>
+            </div>
+          ))}
+        </div>
+        <p class="small">
+          Last successful refresh:{' '}
+          {runs.results.find((r) => r.status === 'success')
+            ? new Date(
+                runs.results.find((r) => r.status === 'success')!.finished_at,
+              ).toLocaleString('en-US', { timeZone: 'America/New_York' })
+            : 'Not run yet'}{' '}
+          · Dashboard lists up to 100 records. Clicks are not sales.
+        </p>
+        <div class="action-row" style="margin:18px 0">
+          <button data-action="monitor">Run monitoring now</button>
+          <button data-action="publishing">Process social queue</button>
+        </div>
+      </div>
+      <section class="panel admin-panel" id="review">
+        <div class="section-heading">
+          <div>
+            <h2>Deal management</h2>
+            <p>
+              Review evidence before approval. Current price and history are revalidated
+              server-side.
+            </p>
+          </div>
+          <span class="badge">{reviews.length} awaiting review</span>
+        </div>
+        <div class="overflow">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Current / baseline</th>
+                <th>Score</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {deals.results.map((d) => (
+                <tr>
+                  <td>
+                    <a href={`/admin/listings/${d.listing_id}`}>{d.name}</a>
+                    <div class="small">
+                      {d.category_name} · {d.condition}
+                    </div>
+                  </td>
+                  <td>
+                    {money(d.current_cents)}
+                    <div class="small">
+                      Baseline {money(d.baseline_cents)} · −{d.discount}%
+                    </div>
+                  </td>
+                  <td>
+                    <span class="badge">{d.score}</span>
+                  </td>
+                  <td>
+                    {d.status}
+                    {d.featured === 1 && <span class="small"> · featured</span>}
+                  </td>
+                  <td>
+                    <div class="action-row">
+                      {d.status === 'review' && (
+                        <button data-action="approve" data-id={d.id}>
+                          Approve
+                        </button>
+                      )}
+                      {d.status !== 'rejected' && (
+                        <button data-action="reject" data-id={d.id}>
+                          Reject
+                        </button>
+                      )}
+                      <button data-action="feature" data-id={d.id}>
+                        Feature
+                      </button>
+                      <button data-action="recheck" data-id={d.listing_id}>
+                        Recheck
+                      </button>
+                      {d.status === 'active' && (
+                        <button data-action="draft" data-id={d.id}>
+                          Create draft
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section class="panel admin-panel" id="products">
+        <h2>Tracked products & affiliate links</h2>
+        <div class="overflow">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Listing</th>
+                <th>Price</th>
+                <th>Availability</th>
+                <th>Checked</th>
+                <th>Affiliate URL</th>
+              </tr>
+            </thead>
+            <tbody>
+              {listings.results.map((l) => (
+                <tr>
+                  <td>
+                    <a href={`/admin/listings/${l.id}`}>{l.name}</a>
+                    <div class="small">
+                      {l.provider_id} · {l.external_id}
+                    </div>
+                  </td>
+                  <td>{money(l.price_cents)}</td>
+                  <td>{l.available ? 'Available' : 'Unavailable'}</td>
+                  <td>{timeAgo(l.checked_at)}</td>
+                  <td>
+                    <form class="inline-form" data-form="affiliate">
+                      <input type="hidden" name="id" value={l.id} />
+                      <label class="field">
+                        <input
+                          name="url"
+                          type="url"
+                          aria-label={`Affiliate URL for ${l.name}`}
+                          value={l.affiliate_url ?? ''}
+                          placeholder="Authorized HTTPS URL"
+                        />
+                      </label>
+                      <button type="submit" style="font-size:10px;padding:4px 8px;margin-top:5px">
+                        Save link
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section class="panel admin-panel" id="social">
+        <div class="section-heading">
+          <div>
+            <h2>Social publishing</h2>
+            <p>
+              Buffer GraphQL ·{' '}
+              {demo
+                ? 'Mock transport only'
+                : e.BUFFER_TOKEN
+                  ? 'Server credential configured'
+                  : 'Credentials required'}{' '}
+              · Mode: {s.postingMode}
+            </p>
+          </div>
+          <button data-action="buffer-channels">Check Buffer channels</button>
+        </div>
+        <div id="channel-results" class="small" aria-live="polite"></div>
+        <p class="small">
+          Selected X channel: {s.channelId || 'None'} · {s.maxDailyPosts} posts/day ·{' '}
+          {s.minPostHours}h spacing · Minimum score {s.socialMinScore}
+        </p>
+        <p class="status-message">
+          Publishing is{' '}
+          {s.postingMode === 'disabled'
+            ? 'disabled'
+            : demo
+              ? 'simulated'
+              : s.publishingPausedUntil > Date.now()
+                ? 'paused after a provider error'
+                : 'configured'}
+          . Stop everything prevents new submissions. Posts already scheduled in Buffer must be
+          paused in Buffer.
+        </p>
+        {drafts.results.length ? (
+          drafts.results.map((d) => (
+            <div style="border-top:1px solid var(--line);padding-top:18px;margin-top:18px">
+              <div class="section-heading">
+                <strong>{d.name}</strong>
+                <span class="badge">{d.status}</span>
+              </div>
+              <pre class="post-preview">{d.text}</pre>
+              <div class="action-row">
+                {d.status === 'draft' && (
+                  <button data-action="approve-draft" data-id={d.id}>
+                    Approve for queue
+                  </button>
+                )}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div class="empty">No drafts yet. Create a draft from an approved deal.</div>
+        )}
+        <h3 style="margin-top:25px">Publishing jobs</h3>
+        <div class="overflow">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>State</th>
+                <th>Remote ID</th>
+                <th>Scheduled (New York)</th>
+                <th>Attempts</th>
+                <th>Error / recovery</th>
+              </tr>
+            </thead>
+            <tbody>
+              {jobs.results.map((j) => (
+                <tr>
+                  <td>
+                    <span class="badge">{j.state}</span>
+                  </td>
+                  <td>{j.buffer_post_id ?? '—'}</td>
+                  <td>
+                    {j.scheduled_for
+                      ? new Date(j.scheduled_for).toLocaleString('en-US', {
+                          timeZone: 'America/New_York',
+                        })
+                      : '—'}
+                  </td>
+                  <td>{j.attempts}</td>
+                  <td>
+                    {j.error ?? '—'}
+                    {!demo && j.buffer_post_id && (
+                      <button data-action="reconcile" data-id={j.id}>
+                        Refresh status
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section class="panel admin-panel" id="settings">
+        <h2>System settings</h2>
+        <form id="settings-form">
+          <div class="settings-grid">
+            {numericFields.map(([key, label, unit]) => (
+              <label class="field">
+                {label}
+                <input type="number" name={key} value={Number(s[key])} min="0" step="1" required />
+                <span class="small">{unit}</span>
+              </label>
+            ))}
+            <label class="field">
+              Posting mode
+              <select name="postingMode">
+                <option value="disabled" selected={s.postingMode === 'disabled'}>
+                  A · Disabled
+                </option>
+                <option value="manual" selected={s.postingMode === 'manual'}>
+                  B · Manual approval
+                </option>
+                <option value="automatic" selected={s.postingMode === 'automatic'}>
+                  C · Automatic
+                </option>
+              </select>
+            </label>
+            <label class="field">
+              Buffer organization ID
+              <input name="organizationId" value={s.organizationId} id="organization-id" />
+            </label>
+            <label class="field">
+              Connected X channel ID
+              <input name="channelId" value={s.channelId} id="channel-id" />
+            </label>
+            <label class="field">
+              Publishing paused until (Unix milliseconds)
+              <input name="publishingPausedUntil" type="number" value={s.publishingPausedUntil} />
+            </label>
+          </div>
+          <label class="check">
+            <input type="checkbox" name="monitoringEnabled" checked={s.monitoringEnabled} /> Enable
+            authorized monitoring
+          </label>
+          <label class="check">
+            <input type="checkbox" name="accountEligible" checked={s.accountEligible} /> I confirm
+            this is an authorized, eligible account and intend to activate the selected publishing
+            mode.
+          </label>
+          <label class="check">
+            <input type="checkbox" name="autoApproveDeals" checked={s.autoApproveDeals} />{' '}
+            Automatically approve newly qualified deals for the website
+          </label>
+          <h3>Score weights</h3>
+          <div class="settings-grid">
+            {Object.entries(s.scoreWeights).map(([key, value]) => (
+              <label class="field">
+                {key}
+                <input
+                  type="number"
+                  name={`weight-${key}`}
+                  value={value}
+                  min="0"
+                  max="100"
+                  required
+                />
+              </label>
+            ))}
+            <label class="field full">
+              Category score adjustments (JSON, −10 to +10)
+              <textarea name="categoryBoosts">{JSON.stringify(s.categoryBoosts,null,2)}</textarea>
+            </label>
+          </div>
+          <p class="small">
+            Environment mode is {e.APP_MODE}. Change APP_MODE in both Worker configurations to
+            switch environments. Server credentials and the LIVE_PUBLISHING_ALLOWED gate cannot be
+            edited by a browser. Demo data never becomes production data.
+          </p>
+          <button class="primary" type="submit">
+            Save settings
+          </button>
+        </form>
+      </section>
+      <section class="panel admin-panel" id="sources">
+        <h2>Sources & categories</h2>
+        <h3>Data providers</h3>
+        <div class="action-row">
+          {providers.results.map((p) => (
+            <button data-action="provider" data-id={p.id} data-enabled={String(!p.enabled)}>
+              {p.enabled ? 'Disable' : 'Enable'} {p.id}
+            </button>
+          ))}
+        </div>
+        <p class="small">
+          Feed imports record observations on arrival. File feeds do not get an invented automated
+          URL. Reimport an updated authorized feed at your chosen cadence.
+        </p>
+        <h3>Categories</h3>
+        <div class="filterbar">
+          {categories.results.map((c) => (
+            <button
+              class:list={['chip', c.enabled && 'active']}
+              data-action="category"
+              data-id={c.id}
+              data-name={c.name}
+              data-enabled={String(!c.enabled)}
+            >
+              {c.name} {c.enabled ? '✓' : 'off'}
+            </button>
+          ))}
+        </div>
+        <form data-form="category">
+          <div class="settings-grid">
+            <label class="field">
+              Category slug
+              <input name="id" pattern="[a-z0-9-]+" required placeholder="networking" />
+            </label>
+            <label class="field">
+              Category name
+              <input name="name" required placeholder="Networking" />
+            </label>
+          </div>
+          <button type="submit" style="margin-top:12px">
+            Add category
+          </button>
+        </form>
+        <h3>Authorized retailer</h3>
+        <form data-form="retailer">
+          <div class="settings-grid">
+            <label class="field">
+              Retailer ID
+              <input name="id" required />
+            </label>
+            <label class="field">
+              Retailer name
+              <input name="name" required />
+            </label>
+            <label class="field full">
+              Approved hosts (comma-separated; must be in server FEED_HOSTS)
+              <input name="hosts" required placeholder="retailer.example" />
+            </label>
+          </div>
+          <button type="submit" style="margin-top:12px">
+            Save retailer
+          </button>
+        </form>
+        <h3>Import an authorized feed</h3>
+        <form data-form="import">
+          <div class="settings-grid">
+            <label class="field">
+              Retailer
+              <select name="retailer">
+                {retailers.results
+                  .filter((r) => r.id !== 'demo')
+                  .map((r) => (
+                    <option value={r.id}>{r.name}</option>
+                  ))}
+              </select>
+            </label>
+            <label class="field">
+              Format
+              <select name="format">
+                <option value="json">JSON</option>
+                <option value="csv">CSV</option>
+              </select>
+            </label>
+            <label class="field">
+              Provider
+              <select name="provider">
+                <option value="feed">Authorized file feed</option>
+                <option value="ebay">eBay Browse (refresh before import)</option>
+              </select>
+            </label>
+            <label class="field full">
+              Feed content
+              <textarea
+                name="text"
+                required
+                placeholder="Paste the authorized CSV or JSON feed. See SETUP.md for the schema."
+              />
+            </label>
+          </div>
+          <label class="check">
+            <input type="checkbox" name="authorized" required /> I have authorization to use this
+            data and any images.
+          </label>
+          <button type="submit">Import listings</button>
+        </form>
+        <h3>Enter verified commission revenue</h3>
+        <form data-form="revenue">
+          <div class="settings-grid">
+            <label class="field">
+              Retailer
+              <input name="retailer" required />
+            </label>
+            <label class="field">
+              Verified amount (USD cents)
+              <input name="amount" type="number" min="0" required />
+            </label>
+            <label class="field full">
+              Statement or transaction reference
+              <input name="reference" required />
+            </label>
+          </div>
+          <button type="submit" style="margin-top:12px">
+            Record verified revenue
+          </button>
+        </form>
+      </section>
+      <section class="panel admin-panel" id="health">
+        <h2>System health</h2>
+        <div class="stat-grid">
+          <div class="stat">
+            <small>Database</small>
+            <b style="font-size:18px">D1 connected</b>
+          </div>
+          <div class="stat">
+            <small>Monitoring</small>
+            <b style="font-size:18px">{s.monitoringEnabled ? 'Enabled' : 'Paused'}</b>
+          </div>
+          <div class="stat">
+            <small>Buffer transport</small>
+            <b style="font-size:18px">
+              {demo ? 'Simulated' : e.BUFFER_TOKEN ? 'Configured' : 'Not configured'}
+            </b>
+          </div>
+          <div class="stat">
+            <small>eBay access</small>
+            <b style="font-size:18px">
+              {e.EBAY_ACCESS_TOKEN || (e.EBAY_CLIENT_ID && e.EBAY_CLIENT_SECRET)
+                ? 'Configured'
+                : 'Not configured'}
+            </b>
+          </div>
+        </div>
+        <h3>Job runs</h3>
+        <div class="overflow">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Job</th>
+                <th>Started</th>
+                <th>Checks</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {runs.results.map((r) => (
+                <tr>
+                  <td>{r.kind}</td>
+                  <td>
+                    {new Date(r.started_at).toLocaleString('en-US', {
+                      timeZone: 'America/New_York',
+                    })}
+                  </td>
+                  <td>{r.checked}</td>
+                  <td>{r.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <h3>Recent failures</h3>
+        {errors.results.length ? (
+          <table class="data-table">
+            <tbody>
+              {errors.results.map((err) => (
+                <tr>
+                  <td>{err.scope}</td>
+                  <td>{err.message}</td>
+                  <td>{timeAgo(err.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p class="small">
+            No recorded errors. Credentials are never included in operational error messages.
+          </p>
+        )}
+      </section>
+      <section class="panel admin-panel" id="audit">
+        <h2>Administrator audit history</h2>
+        <div class="overflow">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Actor</th>
+                <th>Action</th>
+                <th>Target</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {audits.results.map((a) => (
+                <tr>
+                  <td>{a.actor}</td>
+                  <td>{a.action}</td>
+                  <td>{a.target || '—'}</td>
+                  <td>{timeAgo(a.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+  <script
+    id="admin-initial"
+    type="application/json"
+    set:html={JSON.stringify({ settings: s, csrf: Astro.locals.csrf }).replace(/</g, '\\u003c')}
+  />
+</Layout>
+<script>
+  const initial = JSON.parse(document.querySelector('#admin-initial')!.textContent!);
+  function toast(message: string) {
+    document.querySelector('.toast')?.remove();
+    const node = document.createElement('div');
+    node.className = 'toast';
+    node.setAttribute('role', 'status');
+    node.textContent = message;
+    document.body.appendChild(node);
+    setTimeout(() => node.remove(), 8000);
+  }
+  async function action(body: unknown, reload = true) {
+    const response = await fetch('/api/admin/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': initial.csrf },
+      body: JSON.stringify(body),
+    });
+    const data: any = await response.json();
+    if (!response.ok) throw new Error(data.error);
+    if (reload) location.reload();
+    return data;
+  }
+  document.querySelectorAll<HTMLButtonElement>('[data-action]').forEach((button) =>
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      try {
+        const name = button.dataset.action;
+        const result = await action(
+          {
+            action: name,
+            id: button.dataset.id,
+            name: button.dataset.name,
+            enabled: button.dataset.enabled === 'true',
+          },
+          !['buffer-channels', 'stop', 'logout'].includes(name!),
+        );
+        if (name === 'buffer-channels') {
+          const target = document.querySelector('#channel-results')!;
+          target.textContent = JSON.stringify(result, null, 2);
+          const org = document.querySelector<HTMLInputElement>('#organization-id')!,
+            channel = document.querySelector<HTMLInputElement>('#channel-id')!;
+          if (result.organizations?.length === 1) org.value = result.organizations[0].id;
+          if (result.channels?.filter((c: any) => c.service === 'twitter').length === 1)
+            channel.value = result.channels.find((c: any) => c.service === 'twitter').id;
+          toast(
+            'Choose the organization and eligible X channel in settings. Save, then check again if needed.',
+          );
+        }
+        if (name === 'stop') {
+          toast(result.message);
+          document.querySelector('#social .status-message')!.textContent = result.message;
+        }
+        if (name === 'logout') location.href = '/admin/login';
+      } catch (error) {
+        toast(error instanceof Error ? error.message : 'Action failed');
+      } finally {
+        button.disabled = false;
+      }
+    }),
+  );
+  document
+    .querySelector<HTMLFormElement>('#settings-form')!
+    .addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget as HTMLFormElement,
+        data = new FormData(form),
+        value = { ...initial.settings };
+      for (const [key] of Object.entries(value)) {
+        if (typeof value[key] === 'number') value[key] = Number(data.get(key));
+        else if (typeof value[key] === 'boolean') value[key] = data.has(key);
+        else if (typeof value[key] === 'string') value[key] = String(data.get(key) ?? '');
+      }
+      value.scoreWeights = {};
+      for (const [key] of Object.entries(initial.settings.scoreWeights))
+        value.scoreWeights[key] = Number(data.get(`weight-${key}`));
+      try {
+        value.categoryBoosts = JSON.parse(String(data.get('categoryBoosts')));
+        await action({ action: 'settings', value });
+      } catch (error) {
+        toast(error instanceof Error ? error.message : 'Settings failed');
+      }
+    });
+  document.querySelectorAll<HTMLFormElement>('[data-form]').forEach((form) =>
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const data = new FormData(form),
+        body: any = { action: form.dataset.form, ...Object.fromEntries(data) };
+      if (body.action === 'category') body.enabled = true;
+      if (body.action === 'retailer')
+        body.hosts = String(body.hosts)
+          .split(',')
+          .map((v: string) => v.trim());
+      if (body.action === 'import') body.authorized = data.has('authorized');
+      if (body.action === 'revenue') body.amount = Number(body.amount);
+      if (body.action === 'affiliate') body.url = body.url || null;
+      try {
+        await action(body);
+      } catch (error) {
+        toast(error instanceof Error ? error.message : 'Action failed');
+      }
+    }),
+  );
+</script>

@@ -1,0 +1,36 @@
+---
+import DealCard from './DealCard.astro';
+import Icon from './Icon.astro';
+import type { DealView } from '../lib/types';
+interface Props {
+  title: string;
+  description: string;
+  deals: DealView[];
+  href?: string;
+  id?: string;
+}
+const { title, description, deals, href = '/deals', id } = Astro.props;
+---
+
+<section class="section" id={id}>
+  <div class="section-heading">
+    <div>
+      <h2>{title}</h2>
+      <p>{description}</p>
+    </div>
+    <a href={href}>
+      Explore deals <Icon size={13} />
+    </a>
+  </div>
+  {deals.length ? (
+    <div class="deal-grid">
+      {deals.map((d) => (
+        <DealCard deal={d} />
+      ))}
+    </div>
+  ) : (
+    <div class="empty">
+      No current deals meet these criteria. Check back after the next data refresh.
+    </div>
+  )}
+</section>

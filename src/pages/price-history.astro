@@ -1,0 +1,78 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { runtime } from '../lib/runtime';
+import { publicDeals } from '../lib/db/repository';
+import { money, timeAgo } from '../lib/types';
+const deals = await publicDeals(runtime(), { limit: 50 });
+---
+
+<Layout
+  title="Technology price history"
+  description="Explore observed prices, historical baselines, and the evidence behind DealRadar offers."
+>
+  <div class="container">
+    <div class="page-top">
+      <div class="eyebrow">THE NUMBERS BEHIND THE DEALS</div>
+      <h1>Price history, in plain sight.</h1>
+      <p class="small">
+        Open a listing to inspect its chart and recorded observations. All totals include known
+        shipping; taxes are excluded.
+      </p>
+    </div>
+    <div class="panel overflow">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Current total</th>
+            <th>Previous median</th>
+            <th>Change</th>
+            <th>Last check</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {deals.map((d) => (
+            <tr>
+              <td>
+                <a href={`/deals/${d.slug}`}>{d.name}</a>
+                <div class="small">
+                  {d.retailer} · {d.condition}
+                </div>
+              </td>
+              <td>{money(d.current_cents)}</td>
+              <td>{money(d.baseline_cents)}</td>
+              <td style="color:var(--green)">−{d.discount}%</td>
+              <td>{timeAgo(d.checked_at)}</td>
+              <td>
+                <a class="badge" href={`/deals/${d.slug}`}>
+                  View history →
+                </a>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {!deals.length && <div class="empty">No current tracked deals yet.</div>}
+    </div>
+    <div class="editorial">
+      <div>
+        <h2>
+          A useful baseline.
+          <br />
+          An honest comparison.
+        </h2>
+        <p>
+          We use prior observations of the same listing, require history across multiple days, and
+          ignore retailer crossed-out prices.
+        </p>
+        <a href="/methodology">Read the full methodology →</a>
+      </div>
+      <p>
+        Unknown shipping, sparse history, stale data, and unavailable stock can prevent
+        qualification. A “30-day low” requires at least 30 tracked days with sufficiently continuous
+        observations.
+      </p>
+    </div>
+  </div>
+</Layout>

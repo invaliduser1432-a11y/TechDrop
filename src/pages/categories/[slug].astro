@@ -1,0 +1,45 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import DealBrowser from '../../components/DealBrowser.astro';
+import { runtime } from '../../lib/runtime';
+import { publicDeals } from '../../lib/db/repository';
+const e = runtime(),
+  category = await e.DB.prepare('SELECT id,name FROM categories WHERE id=? AND enabled=1')
+    .bind(Astro.params.slug)
+    .first<{ id: string; name: string }>();
+if (!category) return Astro.rewrite('/404');
+const page = Math.max(1, Math.min(100, Number(Astro.url.searchParams.get('page')) || 1)),
+  sort = Astro.url.searchParams.get('sort') ?? 'score',
+  max = Astro.url.searchParams.get('max') ?? '';
+const deals = await publicDeals(e, {
+  category: category.id,
+  sort,
+  limit: 13,
+  offset: (page - 1) * 12,
+  maxPrice: ['50', '100'].includes(max) ? Number(max) * 100 : undefined,
+});
+---
+
+<Layout
+  title={`${category.name} deals & price history`}
+  description={`Compare ${category.name.toLowerCase()} deals using observed prices for the same product listing.`}
+  noindex={Astro.url.searchParams.size > 0 || deals.length === 0}
+>
+  <div class="container">
+    <div class="page-top">
+      <div class="breadcrumbs">
+        <a href="/">Home</a> / <a href="/categories">Categories</a> / {category.name}
+      </div>
+      <h1>{category.name} deals</h1>
+      <p class="small">Compare the price today with the history behind it.</p>
+    </div>
+    <DealBrowser
+      deals={deals}
+      categories={[category]}
+      category={category.id}
+      page={page}
+      sort={sort}
+      max={max}
+    />
+  </div>
+</Layout>

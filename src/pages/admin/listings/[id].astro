@@ -1,0 +1,83 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import PriceChart from '../../../components/PriceChart';
+import { runtime } from '../../../lib/runtime';
+import { getSettings } from '../../../lib/config';
+import { getListing, observations } from '../../../lib/db/repository';
+import { scoreDeal } from '../../../lib/price/scoring';
+import { money } from '../../../lib/types';
+const e = runtime(),
+  l = await getListing(e.DB, Astro.params.id!);
+if (!l) return new Response('Listing not found', { status: 404 });
+const history = await observations(e.DB, l.id),
+  score = scoreDeal(l, history, await getSettings(e.DB));
+---
+
+<Layout title={`Inspect ${l.name}`} noindex>
+  <div class="container">
+    <div class="page-top">
+      <div class="breadcrumbs">
+        <a href="/admin">Admin</a> / Listing evidence
+      </div>
+      <h1>{l.name}</h1>
+      <p class="small">
+        {l.externalId} · {l.variant} · {l.condition} · {l.currency}
+      </p>
+    </div>
+    <div class="panel">
+      <h2>Qualification score: {score.score}/100</h2>
+      <p>
+        {score.qualified ? 'Qualifies against the current thresholds' : score.reasons.join(' · ')}
+      </p>
+      <div class="stat-grid">
+        <div class="stat">
+          <small>Historical median</small>
+          <b>{money(score.baseline)}</b>
+        </div>
+        <div class="stat">
+          <small>Current total</small>
+          <b>{money(score.current)}</b>
+        </div>
+        <div class="stat">
+          <small>Observed days</small>
+          <b>{score.history.days}</b>
+        </div>
+        <div class="stat">
+          <small>History span</small>
+          <b>{score.history.span.toFixed(1)}d</b>
+        </div>
+      </div>
+      <PriceChart
+        client:visible
+        observations={history
+          .filter((o) => o.shipping !== null)
+          .map((o) => ({ at: o.at, total: o.price + o.shipping! }))}
+        demo={l.demo}
+      />
+      <h3>Score components (before weights)</h3>
+      <pre class="post-preview">{JSON.stringify(score.components,null,2)}</pre>
+      <div class="overflow">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Timestamp UTC</th>
+              <th>Item price</th>
+              <th>Shipping</th>
+              <th>Identity key</th>
+            </tr>
+          </thead>
+          <tbody>
+            {history.slice(0, 100).map((o) => (
+              <tr>
+                <td>{new Date(o.at).toISOString()}</td>
+                <td>{money(o.price)}</td>
+                <td>{o.shipping === null ? 'Unknown' : money(o.shipping)}</td>
+                <td>{o.identityKey}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</Layout>

@@ -1,0 +1,151 @@
+---
+import '../styles/global.css';
+import Icon from '../components/Icon.astro';
+import { runtime } from '../lib/runtime';
+interface Props {
+  title?: string;
+  description?: string;
+  noindex?: boolean;
+  canonicalPath?: string;
+  structured?: unknown;
+}
+const {
+  title = 'Tech deals backed by price history',
+  description = 'Find technology price drops, inspect listing history, and understand how every deal is scored.',
+  noindex = false,
+  canonicalPath,
+  structured,
+} = Astro.props;
+const env = runtime(),
+  demo = env.APP_MODE === 'demo';
+const canonical = new URL(canonicalPath ?? Astro.url.pathname, env.SITE_URL).href;
+const pathname = Astro.url.pathname;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} | DealRadar</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta name="robots" content={noindex || demo ? 'noindex, nofollow' : 'index, follow'} />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={`${title} | DealRadar`} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={new URL('/og.svg', env.SITE_URL).href} />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={`${title} | DealRadar`} />
+    <meta name="twitter:description" content={description} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script is:inline>
+      try {
+        if (
+          localStorage.getItem('dr-theme') === 'dark' ||
+          (!localStorage.getItem('dr-theme') && matchMedia('(prefers-color-scheme: dark)').matches)
+        )
+          document.documentElement.classList.add('dark');
+      } catch {}
+    </script>
+    {structured && !demo && (
+      <script
+        type="application/ld+json"
+        set:html={JSON.stringify(structured).replace(/</g, '\\u003c')}
+      />
+    )}
+  </head>
+  <body>
+    <a class="skip-link" href="#main">
+      Skip to content
+    </a>
+    <header class="site-header">
+      <div class="container header-main">
+        <a href="/" class="logo" aria-label="DealRadar home">
+          <Icon name="radar" size={29} />
+          Deal<span>Radar</span>
+        </a>
+        <form class="search" action="/search">
+          <Icon name="search" />
+          <input
+            name="q"
+            aria-label="Search tech deals"
+            placeholder="Search products, brands, or categories..."
+            value={Astro.url.searchParams.get('q') ?? ''}
+          />
+        </form>
+        <div class="header-end">
+          <span>Smarter shopping starts here</span>
+          <button
+            class="icon-button"
+            id="theme-toggle"
+            aria-label="Toggle dark mode"
+            title="Toggle theme"
+          >
+            <Icon name="moon" />
+          </button>
+        </div>
+      </div>
+      <nav class="container nav" aria-label="Main navigation">
+        <a href="/deals" class:list={[pathname === '/deals' && 'active']}>
+          <Icon name="spark" size={15} />
+          Today's Deals
+        </a>
+        <a href="/categories" class:list={[pathname.startsWith('/categories') && 'active']}>
+          Categories
+        </a>
+        <a href="/deals?sort=discount">Biggest Discounts</a>
+        <a href="/price-history" class:list={[pathname === '/price-history' && 'active']}>
+          Price History
+        </a>
+        <span class="nav-note">
+          <span class="dot" /> {demo ? 'Demo monitoring' : 'History you can inspect'}
+        </span>
+      </nav>
+    </header>
+    {demo && (
+      <div class="demo-banner">
+        <strong>DEMONSTRATION MODE</strong> · All products, prices, and histories are simulated. No
+        real offers or live social posts. <a href="/methodology">How it works</a>
+      </div>
+    )}
+    <main id="main">
+      <slot />
+    </main>
+    <footer class="site-footer">
+      <div class="container">
+        <div class="footer-top">
+          <div>
+            <a href="/" class="logo">
+              <Icon name="radar" size={25} />
+              Deal<span>Radar</span>
+            </a>
+            <p class="small">Better deals. Clearer evidence.</p>
+          </div>
+          <div class="footer-links">
+            <a href="/methodology">How we verify deals</a>
+            <a href="/affiliate-disclosure">Affiliate disclosure</a>
+            <a href="/privacy">Privacy</a>
+            <a href="/admin">Admin</a>
+          </div>
+        </div>
+        <div class="footer-fine">
+          <span>
+            We may earn a commission when you purchase through our links, at no additional cost to
+            you.
+          </span>
+          <span>© {new Date().getFullYear()} DealRadar · Prices can change.</span>
+        </div>
+      </div>
+    </footer>
+    <script>
+      document.getElementById('theme-toggle')?.addEventListener('click', () => {
+        const dark = document.documentElement.classList.toggle('dark');
+        try {
+          localStorage.setItem('dr-theme', dark ? 'dark' : 'light');
+        } catch {}
+      });
+    </script>
+  </body>
+</html>
