@@ -21,6 +21,8 @@
     "SITE_URL": "https://dealradar.dealradar-1432.workers.dev",
     "ALLOW_LOCAL_ADMIN": "false",
     "ADMIN_EMAILS": "invaliduser1432@gmail.com",
+    "ACCESS_TEAM_DOMAIN": "small-bush-b8c6.cloudflareaccess.com",
+    "ACCESS_AUD": "018e69dfea8b6620463e7c69689d8261e0d962b950fcd4c0fcff7328874d994b",
     "LIVE_PUBLISHING_ALLOWED": "false",
   },
 }
