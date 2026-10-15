@@ -13,6 +13,7 @@ export const GET: APIRoute = async () => {
       : [
           '/',
           '/deals',
+          '/offers',
           '/categories',
           '/price-history',
           '/methodology',

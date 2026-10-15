@@ -1,5 +1,11 @@
 # Architecture
 
+## Retailer current-offer integrations
+
+Amazon US Creators API (OAuth 3.1, OffersV2) and Best Buy Products API use a separate display-only path: admin searches/watchlists → scheduled collector → `retailer_offer_cache` → SSR `/offers`. Both providers default disabled. Server readiness gates, exact IDs, HTTPS destinations, account-specific attribution, availability/condition checks, and per-provider cooldowns apply before publication. Searches fetch the first ten results; watchlists fetch up to ten explicit IDs.
+
+Cache rows are replaced on refresh, expire within one hour (or an earlier Amazon promotion end), and are never copied to `products`, `product_listings`, `price_observations`, deals, or social drafts. Public reads require unexpired approved rows, enabled provider/target/category, current server authorization, and link revalidation. Cron deletes expired rows even with monitoring stopped. Error/audit records contain no raw retailer payloads or request URLs. The original historical monitoring and Buffer paths are unchanged. See RETAILER_SETUP.md for license limitations and activation.
+
 ## Runtime boundaries
 
 The Astro Worker renders public and admin pages and handles validated server APIs. React hydrates the price chart only when visible. Recharts is lazy through an Astro island; server-rendered prices and observation tables remain readable without JavaScript. Tailwind 4 and the shared CSS design system implement responsive light/dark presentation.

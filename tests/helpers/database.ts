@@ -1,13 +1,15 @@
 import { DatabaseSync } from 'node:sqlite';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import type { Env, Listing, Observation } from '../../src/lib/types';
 import { importListings } from '../../src/lib/providers/import';
 import { defaults, saveSettings } from '../../src/lib/config';
 export class TestDatabase {
   sql = new DatabaseSync(':memory:');
   constructor() {
-    this.sql.exec(readFileSync('migrations/0001_initial.sql', 'utf8'));
-    this.sql.exec(readFileSync('migrations/0002_active_listing.sql', 'utf8'));
+    for (const file of readdirSync('migrations')
+      .filter((f) => f.endsWith('.sql'))
+      .sort())
+      this.sql.exec(readFileSync(`migrations/${file}`, 'utf8'));
   }
   prepare(query: string) {
     const database = this.sql;

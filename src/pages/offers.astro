@@ -1,0 +1,139 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Icon from '../components/Icon.astro';
+import { runtime } from '../lib/runtime';
+import { publicRetailerOffers } from '../lib/jobs/retailer-offers';
+import { money } from '../lib/types';
+const offers = await publicRetailerOffers(runtime());
+Astro.response.headers.set('Cache-Control', 'no-store');
+const hasAmazon = offers.some((o) => o.provider === 'amazon');
+const hasBestBuy = offers.some((o) => o.provider === 'bestbuy');
+---
+
+<Layout
+  title="Current retailer offers"
+  description="Browse fresh technology offers from authorized retailer sources. Check each retailer for final price and availability."
+>
+  <div class="container offers-page">
+    <div class="eyebrow">FRESH FROM THE RETAILERS</div>
+    <h1>Current tech offers</h1>
+    <p>
+      Browse current prices from Amazon and Best Buy. These offers have no verified historical
+      discount; see <a href="/deals">our verified deals</a> for price drops backed by recorded
+      history.
+    </p>
+    <p class="small">
+      We may earn a commission from affiliate links. Prices exclude tax; shipping and availability
+      can depend on your location.
+    </p>
+    {hasAmazon && <p class="small">As an Amazon Associate I earn from qualifying purchases.</p>}
+    {!offers.length && (
+      <div class="panel">
+        <Icon name="radar" size={45} />
+        <h2>No fresh retailer offers yet</h2>
+        <p>
+          Offers appear here after an authorized source is connected and its products are approved.
+          Check back soon.
+        </p>
+      </div>
+    )}
+    <div class="offer-grid">
+      {offers.map((offer) => (
+        <article class="panel offer-card">
+          <div class="retailer-label">
+            {offer.provider === 'amazon' ? 'Amazon.com' : 'Best Buy'} · New
+          </div>
+          <h2>{offer.name}</h2>
+          <div class="price">{money(offer.price)}</div>
+          <p class="small">
+            {offer.shipping === null
+              ? 'Shipping calculated by retailer'
+              : offer.shipping === 0
+                ? 'Listed shipping: free'
+                : `Listed shipping: ${money(offer.shipping)}`}{' '}
+            · Seller: {offer.seller}
+          </p>
+          <p class="small">
+            Price and stock checked{' '}
+            <time datetime={new Date(offer.checkedAt).toISOString()}>
+              {new Date(offer.checkedAt).toLocaleString('en-US', {
+                timeZone: 'UTC',
+                dateStyle: 'medium',
+                timeStyle: 'short',
+              })}{' '}
+              UTC
+            </time>
+            . In stock at that time.
+          </p>
+          {offer.provider === 'amazon' && (
+            <p class="small">
+              Product prices and availability are accurate as of the date/time indicated and are
+              subject to change. Any price and availability information displayed on Amazon.com at
+              the time of purchase will apply to the purchase of this product.
+            </p>
+          )}
+          <a
+            class="button primary"
+            href={offer.url}
+            target="_blank"
+            rel={offer.affiliate ? 'sponsored nofollow noopener' : 'nofollow noopener'}
+          >
+            View at {offer.provider === 'amazon' ? 'Amazon' : 'Best Buy'}
+            {offer.affiliate && ' · affiliate link'} <Icon size={14} />
+          </a>
+        </article>
+      ))}
+    </div>
+    {hasAmazon && (
+      <p class="small">
+        CERTAIN CONTENT THAT APPEARS ON THIS SITE COMES FROM AMAZON. THIS CONTENT IS PROVIDED ‘AS
+        IS’ AND IS SUBJECT TO CHANGE OR REMOVAL AT ANY TIME.
+      </p>
+    )}
+    {hasBestBuy && (
+      <p class="small">
+        Product information provided by Best Buy.{' '}
+        <a href="https://developer.bestbuy.com">
+          <img
+            class="bestbuy-attribution"
+            src="https://developer.bestbuy.com/images/bestbuy-logo.png"
+            alt="Best Buy Developer API"
+            width="100"
+            loading="lazy"
+          />
+        </a>
+      </p>
+    )}
+  </div>
+</Layout>
+<style>
+  .offers-page {
+    padding-block: 48px;
+  }
+  .offers-page > p {
+    max-width: 850px;
+    margin-block: 18px;
+  }
+  .offer-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+    gap: 20px;
+    margin-block: 28px;
+  }
+  .offer-card {
+    padding: 24px;
+  }
+  .offer-card h2 {
+    font-size: 19px;
+    margin-block: 14px;
+  }
+  .offer-card p {
+    margin-block: 12px;
+  }
+  .bestbuy-attribution {
+    display: inline-block;
+    vertical-align: middle;
+    height: auto;
+    margin-left: 12px;
+  }
+</style>

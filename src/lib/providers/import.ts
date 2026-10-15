@@ -2,6 +2,10 @@ import type { Listing, Env } from '../types';
 import { getListing } from '../db/repository';
 export async function importListings(env: Env, listings: Listing[]) {
   for (const l of listings) {
+    if (['amazon', 'bestbuy'].includes(l.provider) || ['amazon', 'bestbuy'].includes(l.retailer))
+      throw new Error(
+        'Retailer API offers use a temporary display cache, not permanent price history',
+      );
     if (env.APP_MODE === 'production' && (l.demo || l.provider === 'mock'))
       throw new Error('Production refuses demonstration data');
     const existing = await getListing(env.DB, l.id);

@@ -12,8 +12,18 @@ Use Node 24+ and npm. From the project directory:
 npm ci
 npm run db:migrate
 npm run demo:seed
-npm run dev
 ```
+
+The checked-in Worker configs now target the existing production deployment. Before local development, add these non-secret overrides to the ignored `.dev.vars` file created by `demo:seed`, keeping its generated token:
+
+```dotenv
+APP_MODE=demo
+SITE_URL=http://localhost:4321
+ALLOW_LOCAL_ADMIN=true
+LIVE_PUBLISHING_ALLOWED=false
+```
+
+Then run `npm run dev`. Local migration/seeding commands use `--local`; never seed the remote database.
 
 Open **http://localhost:4321**. The local D1 database persists in `.wrangler/state`. Visit `/admin/login` and use the generated `LOCAL_ADMIN_TOKEN` from the ignored `.dev.vars` file. It is never printed, bundled into a client script, or shipped with the source archive. Local administration requires localhost, development mode, demo mode, and an intentionally configured token; deployed administration requires Cloudflare Access.
 
@@ -34,6 +44,7 @@ Playwright uses system Chromium if `/usr/bin/chromium` exists; otherwise install
 - Interactive Recharts plus server-rendered observation tables, factual methodology, disclosures, canonical metadata, sitemap, robots, 404 and expired-offer 410 responses.
 - D1 migrations, listings and identity-safe observations, 30-minute monitoring, provider cooldowns, backoff, stale/availability expiry, durable locks, audit events and retention.
 - Mock provider, authorized CSV/JSON importer, eBay Browse refresh adapter with application OAuth-token renewal.
+- Amazon US Creators API and Best Buy Products API searches/watchlists, short-lived current offers at `/offers`, website review/automatic publication, and validated account-specific affiliate URLs. See [RETAILER_SETUP.md](RETAILER_SETUP.md) for required access and site-use approval.
 - Configurable score weights, category adjustments, evidence thresholds and optional automatic website approval.
 - Direct approved affiliate links, anonymous event analytics and separately verified commission records.
 - Official Buffer GraphQL adapter: organization/channel lookup, X channel validation, draft creation, scheduling persisted drafts, saved IDs, status reconciliation, rate-limit pause and uncertain-outcome quarantine.
@@ -64,11 +75,13 @@ wrangler.jsonc          Website Worker configuration
 wrangler.jobs.jsonc     Cron Worker configuration
 ```
 
-Read [SETUP.md](SETUP.md), [DEPLOYMENT.md](DEPLOYMENT.md), [ARCHITECTURE.md](ARCHITECTURE.md), [AFFILIATE_SETUP.md](AFFILIATE_SETUP.md), [BUFFER_SETUP.md](BUFFER_SETUP.md), and [SECURITY.md](SECURITY.md).
+Read [SETUP.md](SETUP.md), [DEPLOYMENT.md](DEPLOYMENT.md), [RETAILER_SETUP.md](RETAILER_SETUP.md), [ARCHITECTURE.md](ARCHITECTURE.md), [AFFILIATE_SETUP.md](AFFILIATE_SETUP.md), [BUFFER_SETUP.md](BUFFER_SETUP.md), and [SECURITY.md](SECURITY.md).
 
 ## Production limits
 
-No real eBay, affiliate, Buffer, X, Cloudflare Access tenant, or remote Cloudflare deployment was exercised. External adapters were tested against mocks; D1 migrations and the UI were tested locally. Approved credentials, provider permissions, an Access application and actual database IDs are still needed.
+No real retailer, affiliate, Buffer, X, Cloudflare Access tenant, or remote Cloudflare deployment was exercised for this repository change. External adapters were tested against mocks; D1 migrations and the UI were tested locally. Retailer credentials and permissions still need to be provided. Existing production Cloudflare IDs and Access settings were preserved.
+
+Amazon/Best Buy API offers are a temporary display cache, separate from permanent history and social jobs. They do not establish price drops. API and affiliate approvals are separate; Amazon also requires agreement for use on this price-tracking site. Both new providers start disabled, and live social publishing remains disabled.
 
 File feeds record history on import; they have no invented polling endpoint. Automate delivery through your authorized importer or add a provider for a documented endpoint. eBay seeds exact listing identities from authorized feed metadata and then refreshes through Browse; it does not scrape or auto-crawl the marketplace. USD and known shipping are required for qualification. Unknown stock is treated conservatively.
 

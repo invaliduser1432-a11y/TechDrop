@@ -1,0 +1,189 @@
+---
+import { runtime } from '../lib/runtime';
+import { retailerReadiness, type RetailerOffer } from '../lib/providers/retailer-offers';
+import type { CachedOffer, TargetRow } from '../lib/jobs/retailer-offers';
+import { money } from '../lib/types';
+const e = runtime();
+const [targets, cached, categories] = await Promise.all([
+  e.DB.prepare('SELECT * FROM retailer_targets ORDER BY provider_id,rowid').all<TargetRow>(),
+  e.DB.prepare(
+    'SELECT * FROM retailer_offer_cache WHERE expires_at>? ORDER BY fetched_at DESC LIMIT 100',
+  )
+    .bind(Date.now())
+    .all<CachedOffer>(),
+  e.DB.prepare('SELECT id,name FROM categories WHERE enabled=1 ORDER BY name').all<{
+    id: string;
+    name: string;
+  }>(),
+]);
+const offers = cached.results
+  .filter((row) => !retailerReadiness(e, row.provider_id))
+  .map((row) => ({ ...row, offer: JSON.parse(row.payload) as RetailerOffer }));
+---
+
+<section class="panel admin-panel" id="retailer-sources">
+  <h2>Amazon & Best Buy offers</h2>
+  <p>
+    Search official retailer APIs or refresh a watchlist of exact ASINs / SKUs. Published offers
+    appear at <a href="/offers">Retailer Offers</a>. Current prices are separate from verified
+    historical discounts and the social queue.
+  </p>
+  <div class="stat-grid">
+    {(['amazon', 'bestbuy'] as const).map((provider) => (
+      <div class="stat">
+        <small>
+          {provider === 'amazon'
+            ? 'Amazon Creators API · US / credential version 3.1'
+            : 'Best Buy Products API · US'}
+        </small>
+        <p class="small">
+          {retailerReadiness(e, provider) ??
+            'Server configuration ready. Enable the provider under Sources & categories.'}
+        </p>
+      </div>
+    ))}
+  </div>
+  <p class="small">
+    Amazon requires agreement to use its content on this price-tracking site. API content expires
+    after one hour and is never archived as price history. Credentials and approval references
+    belong in server settings on both workers.
+  </p>
+  <form data-form="retailer-target">
+    <div class="settings-grid">
+      <label class="field">
+        Retailer
+        <select name="provider">
+          <option value="amazon">Amazon</option>
+          <option value="bestbuy">Best Buy</option>
+        </select>
+      </label>
+      <label class="field">
+        Discovery method
+        <select name="mode">
+          <option value="search">Keyword search</option>
+          <option value="items">ASIN / SKU watchlist</option>
+        </select>
+      </label>
+      <label class="field full">
+        Search phrase or product IDs
+        <input
+          name="query"
+          required
+          maxlength="160"
+          placeholder="NVMe SSD, or up to 10 ASINs / SKUs separated by commas"
+        />
+      </label>
+      <label class="field">
+        Category
+        <select name="category">
+          {categories.results.map((c) => (
+            <option value={c.id}>{c.name}</option>
+          ))}
+        </select>
+      </label>
+    </div>
+    <label class="check">
+      <input type="checkbox" name="autoPublish" /> Automatically publish fresh offers from this
+      search / watchlist to the website
+    </label>
+    <button type="submit">Add retailer search</button>
+  </form>
+  <p class="small">
+    Each run checks one due search / watchlist per retailer, up to 10 products each. More searches
+    rotate across later runs. Search refreshes the first page; watchlists refresh the exact IDs you
+    choose.
+  </p>
+  <button data-action="retailer-collect">Collect retailer offers now</button>
+  <div class="overflow">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Retailer / method</th>
+          <th>Query</th>
+          <th>Website publishing</th>
+          <th>Last check / error</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {targets.results.map((t) => (
+          <tr>
+            <td>
+              {t.provider_id} · {t.mode}
+            </td>
+            <td>{t.query}</td>
+            <td>{t.auto_publish ? 'Automatic' : 'Review first'}</td>
+            <td>
+              {t.last_checked_at ? new Date(t.last_checked_at).toISOString() : 'Waiting'}
+              {t.last_error && <p>{t.last_error}</p>}
+            </td>
+            <td>
+              <button data-action="retailer-target-delete" data-id={t.id}>
+                Remove search
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+  <h3>Fresh offers awaiting review / on the website</h3>
+  {!offers.length && (
+    <p class="small">
+      No fresh offers. Add a search, configure server credentials, enable the provider, and collect.
+    </p>
+  )}
+  <div class="overflow">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Current price</th>
+          <th>Affiliate link</th>
+          <th>Expires</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {offers.map((row) => (
+          <tr>
+            <td>
+              {row.offer.name}
+              <br />
+              <span class="small">
+                {row.offer.provider} · {row.offer.externalId}
+              </span>
+            </td>
+            <td>{money(row.offer.price)}</td>
+            <td>{row.offer.affiliate ? 'Configured account link' : 'Ordinary retailer link'}</td>
+            <td>{new Date(row.expires_at).toISOString()}</td>
+            <td>
+              <button
+                data-action="retailer-offer-approval"
+                data-id={row.id}
+                data-enabled={String(!row.approved)}
+              >
+                {row.approved ? 'Hide offer' : 'Publish offer'}
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+  {offers.some((row) => row.provider_id === 'bestbuy') && (
+    <p class="small">
+      Best Buy product information uses the{' '}
+      <a href="https://developer.bestbuy.com">
+        <img
+          src="https://developer.bestbuy.com/images/bestbuy-logo.png"
+          alt="Best Buy Developer API"
+          width="100"
+          loading="lazy"
+          style="display:inline-block;vertical-align:middle;height:auto"
+        />
+      </a>
+      .
+    </p>
+  )}
+</section>

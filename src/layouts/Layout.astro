@@ -96,6 +96,9 @@ const pathname = Astro.url.pathname;
           Categories
         </a>
         <a href="/deals?sort=discount">Biggest Discounts</a>
+        <a href="/offers" class:list={[pathname === '/offers' && 'active']}>
+          Retailer Offers
+        </a>
         <a href="/price-history" class:list={[pathname === '/price-history' && 'active']}>
           Price History
         </a>

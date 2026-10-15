@@ -1,6 +1,7 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import Icon from '../../components/Icon.astro';
+import RetailerSources from '../../components/RetailerSources.astro';
 import { runtime } from '../../lib/runtime';
 import { getSettings } from '../../lib/config';
 import { dealSelect } from '../../lib/db/repository';
@@ -84,6 +85,7 @@ const numericFields: [keyof typeof s, string, string][] = [
       <a href="#social">Social publishing</a>
       <a href="#settings">System settings</a>
       <a href="#sources">Sources & categories</a>
+      <a href="#retailer-sources">Amazon & Best Buy</a>
       <a href="#health">System health</a>
       <a href="#audit">Audit history</a>
       <button data-action="logout" style="margin:20px 10px;font-size:11px">
@@ -455,6 +457,7 @@ const numericFields: [keyof typeof s, string, string][] = [
           </button>
         </form>
       </section>
+      <RetailerSources />
       <section class="panel admin-panel" id="sources">
         <h2>Sources & categories</h2>
         <h3>Data providers</h3>
@@ -781,6 +784,15 @@ const numericFields: [keyof typeof s, string, string][] = [
       if (body.action === 'import') body.authorized = data.has('authorized');
       if (body.action === 'revenue') body.amount = Number(body.amount);
       if (body.action === 'affiliate') body.url = body.url || null;
+      if (body.action === 'retailer-target') {
+        body.value = {
+          provider: body.provider,
+          mode: body.mode,
+          query: body.query,
+          category: body.category,
+          autoPublish: data.has('autoPublish'),
+        };
+      }
       try {
         await action(body);
       } catch (error) {

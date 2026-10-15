@@ -63,6 +63,31 @@ test('admin API blocks anonymous mutations and CSRF', async ({ page, request }) 
   ).toBe(403);
   await expect(page.getByRole('heading', { name: 'DealRadar control center' })).toBeVisible();
 });
+test('retailer offers stay empty in demo and admin can prepare a search without activating an API', async ({
+  page,
+  request,
+}) => {
+  const response = await request.get('/offers');
+  expect(response.status()).toBe(200);
+  expect(response.headers()['cache-control']).toBe('no-store');
+  expect(await response.text()).toContain('No fresh retailer offers yet');
+  await login(page);
+  const section = page.locator('#retailer-sources');
+  await expect(section).toContainText('Real retailer APIs require production mode');
+  const form = section.locator('[data-form=retailer-target]');
+  await form.locator('[name=provider]').selectOption('bestbuy');
+  await form.locator('[name=query]').fill('NVMe SSD');
+  await form.locator('[name=category]').selectOption('storage');
+  await form.getByRole('button', { name: 'Add retailer search' }).click();
+  await page.waitForLoadState('networkidle');
+  const row = section.locator('tr').filter({ hasText: 'NVMe SSD' });
+  await expect(row).toContainText('Review first');
+  await page.getByRole('button', { name: 'Enable bestbuy', exact: true }).click();
+  await expect(page.locator('.toast')).toContainText('require production mode');
+  await row.getByRole('button', { name: 'Remove search' }).click();
+  await page.waitForLoadState('networkidle');
+  await expect(section.locator('tr').filter({ hasText: 'NVMe SSD' })).toHaveCount(0);
+});
 test('admin saves settings, approves candidates and exercises simulated Buffer queue', async ({
   page,
 }) => {

@@ -2,6 +2,8 @@
 
 Apply to the retailer's official program and obtain approval before using affiliate URLs. Follow its rules for website/social traffic, disclosures, images, link destinations, retention and permitted platforms. Verify account age, legal capacity and eligibility from current program terms; use truthful account information and a legitimate authorized account holder. No account is created or restriction bypassed here.
 
+For the built-in **Amazon and Best Buy** integrations, follow [RETAILER_SETUP.md](RETAILER_SETUP.md). These official APIs supply temporary current offers, not the permanent history importer described below. Do not import their API responses into a file feed to bypass retention restrictions. Approved API access alone does not establish affiliate approval or permission for historical tracking.
+
 For eBay, follow the [eBay Partner Network](https://partnernetwork.ebay.com/) and the [Browse API getItem documentation](https://developer.ebay.com/api-docs/buy/browse/resources/item/methods/getItem). Provide your actual approved campaign ID as `EBAY_CAMPAIGN_ID`; the server adds the official `affiliateCampaignId` context. If eBay returns `itemAffiliateWebUrl`, it is validated and stored. No campaign ID means no generated affiliate claim; the ordinary `itemWebUrl` remains usable.
 
 For other retailers, authorize exact hosts in `FEED_HOSTS`, add the retailer, then import its official affiliate URL or save an authorized URL in the tracked listing's admin row. Both ordinary and affiliate destinations must use HTTPS and an approved host with no embedded credentials or unusual port. No invented affiliate IDs or arbitrary redirect destinations are accepted.

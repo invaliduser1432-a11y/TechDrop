@@ -1,6 +1,6 @@
 # Cloudflare deployment
 
-Deployment files are prepared. No remote resources, paid plan, account, public site or live social post were created. The Sites workflow was kept local to honor the brief's external-action constraint and requested Cloudflare deployment architecture.
+The checked-in configs target the existing DealRadar production Workers and D1 database, with Cloudflare Access settings and social publishing disabled. This retailer-integration change does not deploy them or modify remote resources. The account-creation steps below are for a new installation; an existing installation should keep its actual IDs and apply only pending migrations before deployment.
 
 ## 1. Prepare an authorized Cloudflare account
 
@@ -13,7 +13,7 @@ npx wrangler login
 npx wrangler d1 create dealradar
 ```
 
-Copy the actual database ID into **both** `wrangler.jsonc` and `wrangler.jobs.jsonc`. The checked-in UUID is a local-development placeholder, never a claim that a remote DB exists.
+For a new installation, copy your actual database and account IDs into **both** `wrangler.jsonc` and `wrangler.jobs.jsonc`. The checked-in IDs belong to the existing production installation.
 
 ```sh
 npx wrangler d1 migrations apply dealradar --remote
@@ -70,6 +70,8 @@ Astro's Cloudflare adapter builds its unified Worker entrypoint and emits `.wran
 `npm run jobs:deploy` deploys the independent Cron Worker with the checked-in 30-minute trigger. Use the printed website URL and set it as SITE_URL in both configs if it differs, then redeploy. No domain purchase is required. Check Cloudflare Worker logs and the admin System Health page after the first Cron run.
 
 ## 4. Onboard real listings
+
+For Amazon/Best Buy official API searches and watchlists, apply migration `0003_retailer_offers.sql` and follow [RETAILER_SETUP.md](RETAILER_SETUP.md). Configure the same credentials/approval gates on both workers. These sources populate `/offers` and never the historical price-drop or social queues. Keep the jobs Cron active for cache deletion even when monitoring is paused.
 
 Authorize exact feed hosts, create retailer entries in admin, import legitimate data, and enable the appropriate providers/categories. New imports do not receive invented historical data; qualification requires actual subsequent observations across the configured evidence period. Optionally enable Automatic website approval once the policy is reviewed.
 

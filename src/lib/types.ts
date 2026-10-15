@@ -14,6 +14,14 @@ export interface Env {
   EBAY_CLIENT_SECRET?: string;
   EBAY_CAMPAIGN_ID?: string;
   FEED_HOSTS?: string;
+  AMAZON_CREATORS_CLIENT_ID?: string;
+  AMAZON_CREATORS_CLIENT_SECRET?: string;
+  AMAZON_PARTNER_TAG?: string;
+  AMAZON_SITE_APPROVAL_REFERENCE?: string;
+  BESTBUY_API_KEY?: string;
+  BESTBUY_API_APPROVED?: string;
+  BESTBUY_IMPACT_PARTNER_ID?: string;
+  BESTBUY_AFFILIATE_HOSTS?: string;
 }
 export interface Listing {
   id: string;

@@ -16,9 +16,15 @@ import { parseFeed } from '../../../lib/providers/feed';
 import { importListings } from '../../../lib/providers/import';
 import { EbayProvider } from '../../../lib/providers/ebay';
 import { purchaseUrl } from '../../../lib/affiliate/links';
+import { targetSchema, retailerReadiness } from '../../../lib/providers/retailer-offers';
+import { addRetailerTarget, collectRetailerOffers } from '../../../lib/jobs/retailer-offers';
 const id = z.string().min(1).max(200);
 const schema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('settings'), value: settingsSchema }),
+  z.object({ action: z.literal('retailer-target'), value: targetSchema }),
+  z.object({ action: z.literal('retailer-collect') }),
+  z.object({ action: z.literal('retailer-target-delete'), id }),
+  z.object({ action: z.literal('retailer-offer-approval'), id, enabled: z.boolean() }),
   z.object({ action: z.enum(['stop', 'monitor', 'publishing', 'buffer-channels', 'logout']) }),
   z.object({
     action: z.enum([
@@ -43,7 +49,7 @@ const schema = z.discriminatedUnion('action', [
   }),
   z.object({
     action: z.literal('provider'),
-    id: z.enum(['mock', 'ebay', 'feed']),
+    id: z.enum(['mock', 'ebay', 'feed', 'amazon', 'bestbuy']),
     enabled: z.boolean(),
   }),
   z.object({
@@ -98,6 +104,25 @@ export const POST: APIRoute = async ({ request, locals, cookies }) => {
   try {
     let result: unknown = { ok: true };
     switch (body.action) {
+      case 'retailer-target':
+        await addRetailerTarget(env, body.value);
+        break;
+      case 'retailer-target-delete':
+        await env.DB.batch([
+          env.DB.prepare('DELETE FROM retailer_offer_cache WHERE target_id=?').bind(body.id),
+          env.DB.prepare('DELETE FROM retailer_targets WHERE id=?').bind(body.id),
+        ]);
+        break;
+      case 'retailer-collect':
+        result = await collectRetailerOffers(env);
+        break;
+      case 'retailer-offer-approval':
+        await env.DB.prepare(
+          'UPDATE retailer_offer_cache SET approved=? WHERE id=? AND expires_at>?',
+        )
+          .bind(+body.enabled, body.id, Date.now())
+          .run();
+        break;
       case 'logout':
         cookies.delete('dr_admin', { path: '/' });
         break;
@@ -215,11 +240,17 @@ export const POST: APIRoute = async ({ request, locals, cookies }) => {
       case 'provider':
         if (body.id === 'mock' && env.APP_MODE === 'production')
           throw new Error('Mock provider is disabled in production');
+        if (body.enabled && (body.id === 'amazon' || body.id === 'bestbuy')) {
+          const missing = retailerReadiness(env, body.id);
+          if (missing) throw new Error(missing);
+        }
         await env.DB.prepare('UPDATE data_providers SET enabled=?,paused_until=0 WHERE id=?')
           .bind(+body.enabled, body.id)
           .run();
         break;
       case 'retailer': {
+        if (['amazon', 'bestbuy'].includes(body.id))
+          throw new Error('Built-in retailer hosts are managed by their API adapters');
         const allowed = (env.FEED_HOSTS ?? '').split(',').map((v) => v.trim());
         if (body.hosts.some((h) => !allowed.includes(h)))
           throw new Error('Retailer hosts must first be authorized in server FEED_HOSTS');
