@@ -1,6 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "dealradar",
+  "account_id": "917b89b50f003dd0ffdb1bb30f4b3894",
+  "workers_dev": true,
+  "preview_urls": false,
   "main": "@astrojs/cloudflare/entrypoints/server",
   "compatibility_date": "2026-10-14",
   "compatibility_flags": ["nodejs_compat"],
@@ -9,14 +12,15 @@
     {
       "binding": "DB",
       "database_name": "dealradar",
-      "database_id": "00000000-0000-0000-0000-000000000001",
+      "database_id": "aa54ef07-76b5-4208-ad69-73500edec29e",
       "migrations_dir": "migrations",
     },
   ],
   "vars": {
-    "APP_MODE": "demo",
-    "SITE_URL": "http://localhost:4321",
-    "ALLOW_LOCAL_ADMIN": "true",
+    "APP_MODE": "production",
+    "SITE_URL": "https://dealradar.dealradar-1432.workers.dev",
+    "ALLOW_LOCAL_ADMIN": "false",
+    "ADMIN_EMAILS": "invaliduser1432@gmail.com",
     "LIVE_PUBLISHING_ALLOWED": "false",
   },
 }
